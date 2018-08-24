@@ -11,7 +11,12 @@ class CacheElem():
         self.next = None
         self.key = None
         self.val = None
-        self.inserted = False
+
+    def link(self, b):
+        """Links B to self so that self <==> B"""
+        self.next = b
+        b.prev = self
+        return self
 
 class LRUCache():
 
@@ -31,13 +36,11 @@ class LRUCache():
         self.lookup = dict()
         self.head = None
         self.tail = None
-        self.max_size = 0
-        self.cur_size = 0
         self.size_set = False
 
     def setCacheSize(self, size):
-        """Sets the max number of cache elements that this cache will store.
-        Only allows cache size to be set once.
+        """Initializes LRUCache with a continuous block of memory to improve
+        locality. Can only initialize cache once.
         """
         if not type(size) == type(int()):
             raise CacheSizeError("SIZE must be an integer")
@@ -45,63 +48,50 @@ class LRUCache():
         if self.size_set:
             raise CacheSizeError("Cache SIZE already set")
 
-        self.max_size = size
+        # Initialize LRU cache
+        cache = CacheElem()
+        last = cache
+        for i in range(1, size):
+            elem = CacheElem()
+            last.link(elem)
+            last = elem
+
+        self.head = cache
         self.size_set = True
+
+    def isInitialized(self):
+        return self.size_set
 
     def update(self, elem):
         """Updates the linked list pushing element to the head of the list,
         and all other elements towards the tail of the list.
-
-        Update will allow the linked list to grow to a maximum of self.max_size
-        elements. Once self.max_size elements are reached, update raises an
-        exception when trying to insert new elements. Freeing and re-using the
-        least-used element is handled by the put() method.
         """
-        if not elem.prev and not elem.next and not elem.inserted:
-            if self.cur_size < self.max_size:
-                # Tag element so re-insertion doesn't happen
-                elem.inserted = True
-                # Set next to current head
-                elem.next = self.head
-                if not self.head:
-                    # only element in list
-                    self.tail = elem
-                else:
-                    # Update old-head prev link
-                    self.head.prev = elem
-                # set current head to elem
-                self.head = elem
-                # Add elem to lookup table
-                self.lookup[elem.key] = elem
-                self.cur_size += 1
-            else:
-                raise CacheSizeError("Cache size exceeded")
-        elif elem.prev and elem.next:
+        if elem.prev and elem.next:
             # Elem is in the middle, relink list
-            prev = elem.prev
-            next = elem.next
-            # link prev and next together
-            prev.next = next
-            next.prev = prev
+            elem.prev.link(elem.next)
+            # Update floating tail while populating
+            if elem == self.tail:
+                self.tail = elem.prev
             # update elem to head
-            elem.prev = None
-            elem.next = self.head
-            self.head = elem
+            self.head = elem.link(self.head)
+            self.head.prev = None
         elif elem == self.head:
             pass
-        elif elem == self.tail:
+        elif not elem.next:
             # Element is at tail
-            prev = elem.prev
-            if prev:
-                prev.next = None
-            elem.prev = None
-            elem.next = self.head
-            self.head = elem
-            self.tail = prev
-
+            self.tail = elem.prev
+            self.tail.next = None
+            self.head = elem.link(self.head)
+            self.head.prev = None
 
     def get(self, key=None):
         """Gets cache value for key, or raises KeyNotFoundError otherwise."""
+        if not self.size_set:
+            raise CacheSizeError("Cache is uninitialized")
+
+        if not key:
+            raise KeyNotFoundError("Key can't be None type for get()")
+            
         elem = self.lookup.get(key, None)
         if elem == None:
             raise KeyNotFoundError("Key '{}' not found".format(key))
@@ -111,21 +101,33 @@ class LRUCache():
 
     def put(self, key=None, value=None):
         """Updates key element to value. If key is not found in the lookup table
-        either a new element is created an inserted into the list, or the least-
-        recently used element is freed from the cache and resued to store the new
-        key/value pair.
+        either the floating tail pointer is incremented to accommodate a new
+        element, or the least-recently used element is freed from the cache and
+        resued to store the new key/value pair.
         """
+        if not self.size_set:
+            raise CacheSizeError("Cache is uninitialized")
+
+        if not key:
+            raise KeyNotFoundError("Key can't be None type for put()")
+
         elem = self.lookup.get(key, None)
         if elem == None:
-            if self.cur_size < self.max_size:
-                elem = CacheElem()
-                elem.key = key
-                elem.val = value
+            # First insert
+            if not self.tail:
+                elem = self.head
+                self.tail = elem
+            # Still populating cache
+            elif self.tail.next:
+                elem = self.tail.next
+                self.tail = elem
+            # Evict LRU
             else:
                 elem = self.tail
                 del(self.lookup[elem.key])
-                elem.key = key
-                self.lookup[key] = elem
+
+            elem.key = key
+            self.lookup[key] = elem
 
         elem.val = value
         self.update(elem)
