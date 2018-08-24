@@ -1,0 +1,17 @@
+SIZE 3
+GET foo
+SET foo 1
+GET foo
+SET foo 1.1
+GET foo
+SET spam 2
+GET spam
+SET ham third
+SET parrot four
+GET foo
+GET spam
+GET ham
+GET ham parrot
+GET parrot
+EXIT
+

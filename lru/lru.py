@@ -57,37 +57,48 @@ class LRUCache():
         exception when trying to insert new elements. Freeing and re-using the
         least-used element is handled by the put() method.
         """
-        if not elem.prev and not elem.next and not elem.inserted and self.cur_size < self.max_size:
-            # If we're a new link element
-            elem.inserted = True
-            elem.next = self.head
-            self.head = elem
-            if not elem.next:
-                # only element
-                self.tail = elem
-            self.lookup[elem.key] = elem
-            self.cur_size += 1
+        if not elem.prev and not elem.next and not elem.inserted:
+            if self.cur_size < self.max_size:
+                # Tag element so re-insertion doesn't happen
+                elem.inserted = True
+                # Set next to current head
+                elem.next = self.head
+                if not self.head:
+                    # only element in list
+                    self.tail = elem
+                else:
+                    # Update old-head prev link
+                    self.head.prev = elem
+                # set current head to elem
+                self.head = elem
+                # Add elem to lookup table
+                self.lookup[elem.key] = elem
+                self.cur_size += 1
+            else:
+                raise CacheSizeError("Cache size exceeded")
         elif elem.prev and elem.next:
             # Elem is in the middle, relink list
             prev = elem.prev
             next = elem.next
+            # link prev and next together
             prev.next = next
             next.prev = prev
+            # update elem to head
             elem.prev = None
             elem.next = self.head
             self.head = elem
         elif elem == self.head:
-            # Element is already at head, no need to update
             pass
         elif elem == self.tail:
             # Element is at tail
             prev = elem.prev
+            if prev:
+                prev.next = None
             elem.prev = None
-            self.tail = prev
             elem.next = self.head
             self.head = elem
-        else:
-            raise CacheSizeError("Cache size exceeded")
+            self.tail = prev
+
 
     def get(self, key=None):
         """Gets cache value for key, or raises KeyNotFoundError otherwise."""
